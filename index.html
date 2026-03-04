@@ -52,11 +52,11 @@
 
     /* Header */
     header {
-      padding: 40px 0 32px;
+      padding: 24px 0 20px;
       border-bottom: 1px solid var(--border);
-      margin-bottom: 32px;
+      margin-bottom: 28px;
       display: flex;
-      align-items: flex-end;
+      align-items: center;
       justify-content: space-between;
       gap: 16px;
       flex-wrap: wrap;
@@ -64,11 +64,11 @@
 
     .header-left h1 {
       font-family: 'Syne', sans-serif;
-      font-size: clamp(1.8rem, 4vw, 3rem);
+      font-size: clamp(1.4rem, 2.5vw, 2rem);
       font-weight: 800;
       letter-spacing: -0.02em;
       line-height: 1;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
     }
 
     h1 span.ph { color: var(--accent); }
@@ -462,6 +462,36 @@
     color: var(--accent);
     font-size: 0.75rem;
   }
+
+    /* Download button */
+    .download-btn {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-transform: uppercase;
+    }
+    .download-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(0,119,187,0.04);
+    }
+    .download-btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .download-btn svg {
+      flex-shrink: 0;
+    }
 </style>
 </head>
 <body>
@@ -578,7 +608,15 @@
   <div class="chart-card">
     <div class="chart-title">
       <span>TREND × WEATHER OVERLAY</span>
-      <span class="region-tag" id="regionTag">All Philippines</span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span class="region-tag" id="regionTag">All Philippines</span>
+        <button class="download-btn" id="downloadBtn" disabled onclick="downloadChart()">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 1v7M3 6l3 3 3-3M1 10h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Download
+        </button>
+      </div>
     </div>
     <div class="chart-wrap">
       <div class="empty-state" id="emptyState">
@@ -869,6 +907,7 @@ async function fetchWeather() {
   renderChart();
   renderCorrelation();
   setStatus('active', 'DATA LOADED');
+  document.getElementById('downloadBtn').disabled = false;
 
   weatherStatusMsg.textContent = `Weather loaded for ${state.regionName}`;
   fetchSpinner.style.display = 'none';
@@ -941,7 +980,7 @@ function renderChart() {
       min: 0, max: 100,
       title: { display: true, text: 'Search Interest (0–100)', color: '#0077bb', font: { family: 'DM Mono', size: 10 } },
       ticks: { color: '#0077bb', font: { family: 'DM Mono', size: 10 } },
-      grid: { color: 'rgba(0,0,0,0.07)' },1,0.5)' },
+      grid: { color: 'rgba(0,0,0,0.07)' },
     },
     yWeather: {
       type: 'linear',
@@ -1070,6 +1109,29 @@ function setStatus(type, msg) {
   statusText.textContent = msg;
   statusDot.className = 'status-dot';
   if (type === 'active')  statusDot.classList.add('active');
+}
+
+// ─────────────────────────────────────────────
+// Download chart as PNG
+// ─────────────────────────────────────────────
+function downloadChart() {
+  if (!state.chart) return;
+  const canvas = document.getElementById('mainChart');
+
+  // Draw onto a white-background offscreen canvas
+  const offscreen = document.createElement('canvas');
+  offscreen.width  = canvas.width;
+  offscreen.height = canvas.height;
+  const ctx = offscreen.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, offscreen.width, offscreen.height);
+  ctx.drawImage(canvas, 0, 0);
+
+  const link = document.createElement('a');
+  const region = document.getElementById('regionTag').textContent.trim().replace(/\s+/g, '_');
+  link.download = `PH_Trends_Weather_${region}_${new Date().toISOString().split('T')[0]}.png`;
+  link.href = offscreen.toDataURL('image/png');
+  link.click();
 }
 </script>
 </body>
