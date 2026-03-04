@@ -1,0 +1,1070 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PH Trends × Weather</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap');
+
+    :root {
+      --bg: #0a0f1a;
+      --surface: #111827;
+      --surface2: #1a2235;
+      --border: #1f2f47;
+      --accent: #00d4ff;
+      --accent2: #ff6b35;
+      --accent3: #7cfc74;
+      --text: #e8f0fe;
+      --muted: #6b82a8;
+      --trend-color: #00d4ff;
+      --temp-color: #ff6b35;
+      --rain-color: #7cfc74;
+      --humid-color: #b085f5;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Mono', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Grid background */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .wrapper { position: relative; z-index: 1; max-width: 1280px; margin: 0 auto; padding: 0 24px 60px; }
+
+    /* Header */
+    header {
+      padding: 40px 0 32px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 32px;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .header-left h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(1.8rem, 4vw, 3rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    h1 span.ph { color: var(--accent); }
+    h1 span.x  { color: var(--muted); margin: 0 8px; }
+    h1 span.wx { color: var(--accent2); }
+
+    .header-left p {
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 0.7rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+
+    .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      transition: background 0.3s;
+    }
+    .status-dot.active { background: var(--accent3); box-shadow: 0 0 8px var(--accent3); }
+
+    /* Controls row */
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 16px;
+      margin-bottom: 24px;
+      align-items: end;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 700px) {
+      .controls { grid-template-columns: 1fr; }
+    }
+
+    .control-group label {
+      display: block;
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    select, .upload-btn {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.82rem;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b82a8' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+
+    select:hover, select:focus { border-color: var(--accent); }
+
+    .upload-btn {
+      background-image: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      border-style: dashed;
+      color: var(--muted);
+      transition: all 0.2s;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .upload-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(0,212,255,0.04);
+    }
+
+    .upload-btn.loaded {
+      border-style: solid;
+      border-color: var(--accent3);
+      color: var(--accent3);
+      background: rgba(124,252,116,0.04);
+    }
+
+    #csvInput { display: none; }
+
+    /* Toggles */
+    .toggles {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+
+    .toggle-btn {
+      padding: 6px 16px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .toggle-btn .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .toggle-btn[data-key="trend"]   .dot { background: var(--trend-color); }
+    .toggle-btn[data-key="temp"]    .dot { background: var(--temp-color); }
+    .toggle-btn[data-key="rain"]    .dot { background: var(--rain-color); }
+    .toggle-btn[data-key="humid"]   .dot { background: var(--humid-color); }
+
+    .toggle-btn.active {
+      border-color: currentColor;
+      color: var(--text);
+      background: var(--surface2);
+    }
+    .toggle-btn[data-key="trend"].active  { border-color: var(--trend-color); color: var(--trend-color); }
+    .toggle-btn[data-key="temp"].active   { border-color: var(--temp-color);  color: var(--temp-color); }
+    .toggle-btn[data-key="rain"].active   { border-color: var(--rain-color);  color: var(--rain-color); }
+    .toggle-btn[data-key="humid"].active  { border-color: var(--humid-color); color: var(--humid-color); }
+
+    /* Chart card */
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .chart-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+    }
+
+    .chart-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chart-title .region-tag {
+      padding: 3px 10px;
+      background: rgba(0,212,255,0.08);
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 999px;
+      color: var(--accent);
+      font-size: 0.65rem;
+    }
+
+    .chart-wrap { position: relative; height: 380px; }
+
+    /* Empty state */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 380px;
+      gap: 16px;
+      color: var(--muted);
+    }
+
+    .empty-icon {
+      font-size: 3rem;
+      opacity: 0.3;
+    }
+
+    .empty-state p {
+      font-size: 0.8rem;
+      letter-spacing: 0.06em;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    .empty-state .hint {
+      font-size: 0.68rem;
+      color: var(--accent);
+      opacity: 0.7;
+    }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .stat-card:hover { border-color: rgba(0,212,255,0.3); }
+
+    .stat-label {
+      font-size: 0.62rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .stat-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.8rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1;
+    }
+
+    .stat-sub {
+      font-size: 0.65rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .stat-card[data-type="trend"]  .stat-value { color: var(--trend-color); }
+    .stat-card[data-type="temp"]   .stat-value { color: var(--temp-color); }
+    .stat-card[data-type="rain"]   .stat-value { color: var(--rain-color); }
+    .stat-card[data-type="humid"]  .stat-value { color: var(--humid-color); }
+
+    /* Table */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .table-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      font-family: 'Syne', sans-serif;
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.75rem;
+    }
+
+    th {
+      padding: 10px 24px;
+      text-align: left;
+      font-size: 0.62rem;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    td {
+      padding: 10px 24px;
+      border-bottom: 1px solid rgba(31,47,71,0.5);
+      color: var(--text);
+    }
+
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface2); }
+
+    .corr-badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.65rem;
+    }
+
+    .corr-high   { background: rgba(124,252,116,0.12); color: var(--rain-color); }
+    .corr-mid    { background: rgba(0,212,255,0.10);   color: var(--trend-color); }
+    .corr-low    { background: rgba(107,130,168,0.12); color: var(--muted); }
+    .corr-neg    { background: rgba(255,107,53,0.10);  color: var(--temp-color); }
+
+    /* Weather fetch status */
+    .weather-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    /* Loading spinner */
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Footer */
+    footer {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+    }
+
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    .hidden { display: none !important; }
+    /* File protocol warning banner */
+  #fileWarning {
+    display: none;
+    background: linear-gradient(90deg, rgba(255,107,53,0.15), rgba(255,107,53,0.05));
+    border: 1px solid rgba(255,107,53,0.4);
+    border-radius: 10px;
+    padding: 14px 20px;
+    margin-bottom: 24px;
+    font-size: 0.78rem;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  #fileWarning strong { color: var(--accent2); }
+  #fileWarning code {
+    background: var(--surface2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-family: 'DM Mono', monospace;
+    color: var(--accent);
+    font-size: 0.75rem;
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <header>
+    <div class="header-left">
+      <h1><span class="ph">PH Trends</span><span class="x">×</span><span class="wx">Weather</span></h1>
+      <p>Google Trends · Open-Meteo API · Philippines Regional Dashboard</p>
+    </div>
+    <div class="status-pill">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">AWAITING DATA</span>
+    </div>
+  </header>
+
+  <!-- File protocol warning -->
+  <div id="fileWarning">
+    ⚠️ <strong>Weather data won't load when opened as a local file.</strong><br>
+    Browsers block network requests from <code>file://</code> for security. Two options:<br>
+    &nbsp;&nbsp;① <strong>GitHub Pages</strong> — push to GitHub and enable Pages (recommended)<br>
+    &nbsp;&nbsp;② <strong>Local server</strong> — run <code>npx serve .</code> in this folder, then open <code>http://localhost:3000</code>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="control-group">
+      <label>Region</label>
+      <select id="regionSelect">
+        <option value="PH" data-lat="12.8797" data-lon="121.7740">🇵🇭 All Philippines</option>
+        <optgroup label="Luzon">
+          <option value="NCR"      data-lat="14.5995" data-lon="120.9842">NCR — Metro Manila</option>
+          <option value="CAR"      data-lat="17.3515" data-lon="121.1719">CAR — Cordillera</option>
+          <option value="Region I" data-lat="16.0802" data-lon="120.3496">Region I — Ilocos</option>
+          <option value="Region II" data-lat="16.9754" data-lon="121.8107">Region II — Cagayan Valley</option>
+          <option value="Region III" data-lat="15.4794" data-lon="120.7105">Region III — Central Luzon</option>
+          <option value="Region IV-A" data-lat="14.1008" data-lon="121.0794">Region IV-A — CALABARZON</option>
+          <option value="MIMAROPA" data-lat="12.8966" data-lon="121.7914">MIMAROPA</option>
+          <option value="Region V" data-lat="13.4212" data-lon="123.4136">Region V — Bicol</option>
+        </optgroup>
+        <optgroup label="Visayas">
+          <option value="Region VI" data-lat="11.0022" data-lon="122.5380">Region VI — Western Visayas</option>
+          <option value="Region VII" data-lat="10.3157" data-lon="123.8854">Region VII — Central Visayas</option>
+          <option value="Region VIII" data-lat="11.2444" data-lon="125.0388">Region VIII — Eastern Visayas</option>
+        </optgroup>
+        <optgroup label="Mindanao">
+          <option value="Region IX" data-lat="8.1527" data-lon="123.2577">Region IX — Zamboanga Peninsula</option>
+          <option value="Region X" data-lat="8.0202" data-lon="124.6855">Region X — Northern Mindanao</option>
+          <option value="Region XI" data-lat="7.3041" data-lon="126.0893">Region XI — Davao</option>
+          <option value="Region XII" data-lat="6.2715" data-lon="124.6859">Region XII — SOCCSKSARGEN</option>
+          <option value="CARAGA" data-lat="8.9456" data-lon="125.7450">CARAGA</option>
+          <option value="BARMM" data-lat="6.9214" data-lon="122.0790">BARMM — Bangsamoro</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label>Weather Metric</label>
+      <select id="weatherMetric">
+        <option value="temp">Temperature (°C)</option>
+        <option value="rain">Rainfall (mm)</option>
+      </select>
+    </div>
+
+    <div class="control-group">
+      <label>Google Trends CSV</label>
+      <label class="upload-btn" id="uploadLabel" for="csvInput">
+        <span>⬆</span> Upload CSV
+      </label>
+      <input type="file" id="csvInput" accept=".csv" />
+    </div>
+  </div>
+
+  <div id="weatherStatusRow" class="weather-status hidden">
+    <span class="spinner" id="fetchSpinner"></span>
+    <span id="weatherStatusMsg">Fetching weather data...</span>
+  </div>
+
+  <!-- Toggles -->
+  <div class="toggles">
+    <button class="toggle-btn active" data-key="trend">
+      <span class="dot"></span> Search Interest
+    </button>
+    <button class="toggle-btn active" data-key="temp">
+      <span class="dot"></span> Temperature
+    </button>
+    <button class="toggle-btn active" data-key="rain">
+      <span class="dot"></span> Rainfall
+    </button>
+
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row" id="statsRow">
+    <div class="stat-card" data-type="trend">
+      <div class="stat-label">Peak Interest</div>
+      <div class="stat-value" id="statPeak">—</div>
+      <div class="stat-sub" id="statPeakDate">upload trends CSV</div>
+    </div>
+    <div class="stat-card" data-type="temp">
+      <div class="stat-label">Avg Temperature</div>
+      <div class="stat-value" id="statTemp">—</div>
+      <div class="stat-sub" id="statTempSub">select region & load</div>
+    </div>
+    <div class="stat-card" data-type="rain">
+      <div class="stat-label">Total Rainfall</div>
+      <div class="stat-value" id="statRain">—</div>
+      <div class="stat-sub" id="statRainSub">over loaded period</div>
+    </div>
+
+  </div>
+
+  <!-- Chart -->
+  <div class="chart-card">
+    <div class="chart-title">
+      <span>TREND × WEATHER OVERLAY</span>
+      <span class="region-tag" id="regionTag">All Philippines</span>
+    </div>
+    <div class="chart-wrap">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-icon">📂</div>
+        <p>Upload a Google Trends CSV to get started.<br/>Weather data will load automatically.</p>
+        <p class="hint">From Google Trends: Download → CSV (Interest over time)</p>
+      </div>
+      <canvas id="mainChart" class="hidden"></canvas>
+    </div>
+  </div>
+
+  <!-- Correlation table -->
+  <div class="table-card" id="corrTable" style="display:none">
+    <div class="table-header">Correlation Analysis</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Weather Variable</th>
+          <th>Pearson r</th>
+          <th>Interpretation</th>
+          <th>Direction</th>
+        </tr>
+      </thead>
+      <tbody id="corrBody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<footer>
+  <span>Weather data via <a href="https://open-meteo.com" target="_blank">Open-Meteo</a> (free, no key needed) · Trends via Google Trends CSV export</span>
+  <span>Philippines Regional Dashboard</span>
+</footer>
+
+<script>
+// ─────────────────────────────────────────────
+// Detect file:// protocol and show warning
+// ─────────────────────────────────────────────
+if (location.protocol === 'file:') {
+  document.getElementById('fileWarning').style.display = 'block';
+}
+
+// ─────────────────────────────────────────────
+// State
+// ─────────────────────────────────────────────
+const state = {
+  trendsData: [],   // [{date: Date, value: number}]
+  weatherData: {},  // {temp: [], rain: [], humid: []}  — parallel to trendsData
+  region: 'PH',
+  regionName: 'All Philippines',
+  lat: 12.8797,
+  lon: 121.7740,
+  visible: { trend: true, temp: true, rain: true },
+  chart: null,
+};
+
+// ─────────────────────────────────────────────
+// DOM refs
+// ─────────────────────────────────────────────
+const csvInput       = document.getElementById('csvInput');
+const uploadLabel    = document.getElementById('uploadLabel');
+const regionSelect   = document.getElementById('regionSelect');
+const weatherMetric  = document.getElementById('weatherMetric');
+const statusDot      = document.getElementById('statusDot');
+const statusText     = document.getElementById('statusText');
+const regionTag      = document.getElementById('regionTag');
+const emptyState     = document.getElementById('emptyState');
+const chartCanvas    = document.getElementById('mainChart');
+const corrTable      = document.getElementById('corrTable');
+const corrBody       = document.getElementById('corrBody');
+const weatherStatusRow = document.getElementById('weatherStatusRow');
+const fetchSpinner   = document.getElementById('fetchSpinner');
+const weatherStatusMsg = document.getElementById('weatherStatusMsg');
+
+// ─────────────────────────────────────────────
+// CSV Upload
+// ─────────────────────────────────────────────
+csvInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  Papa.parse(file, {
+    skipEmptyLines: true,
+    complete: (result) => {
+      const rows = result.data;
+      // Google Trends CSVs have metadata rows; find the data header
+      let headerIdx = -1;
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i][0] && rows[i][0].toLowerCase().startsWith('week') ||
+            rows[i][0] && rows[i][0].toLowerCase().startsWith('day') ||
+            rows[i][0] && rows[i][0].toLowerCase().startsWith('month') ||
+            rows[i][0] && rows[i][0].toLowerCase() === 'date') {
+          headerIdx = i;
+          break;
+        }
+      }
+
+      if (headerIdx === -1) {
+        // Try to find numeric data rows
+        headerIdx = 0;
+      }
+
+      const dataRows = rows.slice(headerIdx + 1).filter(r => r[0] && r[1]);
+      state.trendsData = dataRows
+        .map(r => {
+          const raw = r[0].trim();
+          let d;
+          // Handle "YYYY-MM-DD - YYYY-MM-DD" weekly format
+          if (raw.includes(' - ')) {
+            d = new Date(raw.split(' - ')[0]);
+          } else {
+            d = new Date(raw);
+          }
+          const val = parseFloat(r[1]);
+          return isNaN(val) || isNaN(d.getTime()) ? null : { date: d, value: val };
+        })
+        .filter(Boolean)
+        .sort((a, b) => a.date - b.date);
+
+      if (state.trendsData.length === 0) {
+        alert('Could not parse CSV. Make sure it is a Google Trends "Interest over time" export.');
+        return;
+      }
+
+      uploadLabel.textContent = `✓ ${file.name}`;
+      uploadLabel.classList.add('loaded');
+
+      setStatus('loading', 'LOADING WEATHER…');
+      fetchWeather();
+    }
+  });
+});
+
+// ─────────────────────────────────────────────
+// Region / Metric changes
+// ─────────────────────────────────────────────
+regionSelect.addEventListener('change', () => {
+  const opt = regionSelect.selectedOptions[0];
+  state.region     = opt.value;
+  state.regionName = opt.textContent;
+  state.lat        = parseFloat(opt.dataset.lat);
+  state.lon        = parseFloat(opt.dataset.lon);
+  regionTag.textContent = opt.textContent.replace(/^🇵🇭\s*/, '');
+  if (state.trendsData.length > 0) {
+    setStatus('loading', 'RELOADING WEATHER…');
+    fetchWeather();
+  }
+});
+
+weatherMetric.addEventListener('change', () => {
+  if (state.trendsData.length > 0) renderChart();
+});
+
+// ─────────────────────────────────────────────
+// Fetch weather from Open-Meteo
+// Strategy: chunk requests by year, use archive-api for all historical data.
+// The archive-api does support CORS — the issue was likely a network/proxy
+// block in the sandbox. We now also try a public CORS proxy as last resort.
+// ─────────────────────────────────────────────
+async function fetchWeather() {
+  if (state.trendsData.length === 0) return;
+
+  const startDate = state.trendsData[0].date;
+  const endDate   = state.trendsData[state.trendsData.length - 1].date;
+  const fmt = d => d.toISOString().split('T')[0];
+
+  weatherStatusRow.classList.remove('hidden');
+  fetchSpinner.style.display = 'inline-block';
+  weatherStatusMsg.textContent = `Fetching weather for ${state.regionName}…`;
+
+  // Build ordered list of endpoints to try
+  const params = `latitude=${state.lat}&longitude=${state.lon}`
+    + `&start_date=${fmt(startDate)}&end_date=${fmt(endDate)}`
+    + `&daily=temperature_2m_mean,precipitation_sum`
+    + `&timezone=Asia%2FManila`;
+
+  // Try fetch with multiple strategies
+  let data = null;
+
+  // Strategy 1: direct fetch (works on GitHub Pages, not file://)
+  const directUrls = [
+    `https://archive-api.open-meteo.com/v1/archive?${params}`,
+    `https://historical-forecast-api.open-meteo.com/v1/forecast?${params}`,
+    `https://api.open-meteo.com/v1/forecast?${params}`,
+  ];
+
+  for (const url of directUrls) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json.daily && json.daily.time) { data = json; break; }
+    } catch (e) {
+      console.warn('Direct fetch failed for', url.split('?')[0], e.message);
+    }
+  }
+
+  // Strategy 2: CORS proxies
+  if (!data) {
+    const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?${params}`;
+    const proxies = [
+      `https://corsproxy.io/?url=${encodeURIComponent(archiveUrl)}`,
+      `https://api.allorigins.win/raw?url=${encodeURIComponent(archiveUrl)}`,
+      `https://proxy.cors.sh/${archiveUrl}`,
+    ];
+    for (const url of proxies) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        if (json.daily && json.daily.time) { data = json; break; }
+      } catch (e) {
+        console.warn('Proxy failed:', url.split('?')[0], e.message);
+      }
+    }
+  }
+
+  // Strategy 3: JSONP (works even from file://)
+  if (!data) {
+    data = await new Promise((resolve) => {
+      const cbName = '__omCb_' + Date.now();
+      const script = document.createElement('script');
+      const archiveUrl = `https://archive-api.open-meteo.com/v1/archive?${params}&format=json`;
+      // Open-Meteo doesn't support JSONP natively, so this will likely fail too,
+      // but we use it as a last signal
+      const timeout = setTimeout(() => {
+        delete window[cbName];
+        script.remove();
+        resolve(null);
+      }, 8000);
+      window[cbName] = (json) => {
+        clearTimeout(timeout);
+        delete window[cbName];
+        script.remove();
+        resolve(json.daily ? json : null);
+      };
+      script.src = archiveUrl + `&callback=${cbName}`;
+      script.onerror = () => { clearTimeout(timeout); resolve(null); };
+      document.head.appendChild(script);
+    });
+  }
+
+  if (!data) {
+    setStatus('error', 'WEATHER FAILED');
+    const isFileProtocol = location.protocol === 'file:';
+    weatherStatusMsg.innerHTML = isFileProtocol
+      ? `⚠️ <strong>Open the file via a server, not directly.</strong> Browsers block network requests from file://. 
+         <br>Run: <code style="background:#1a2235;padding:2px 6px;border-radius:4px">npx serve .</code> in the folder, then open <code style="background:#1a2235;padding:2px 6px;border-radius:4px">http://localhost:3000</code>`
+      : `All weather sources failed. Check your internet connection.`;
+    fetchSpinner.style.display = 'none';
+    return;
+  }
+
+  // Build a lookup: date string → weather values
+  const wMap = {};
+  data.daily.time.forEach((t, i) => {
+    wMap[t] = {
+      temp: data.daily.temperature_2m_mean[i],
+      rain: data.daily.precipitation_sum[i],
+    };
+  });
+
+  // Align daily weather to the trends date points (weekly/monthly → average)
+  const aligned = { temp: [], rain: [] };
+
+  for (let i = 0; i < state.trendsData.length; i++) {
+    const d   = state.trendsData[i].date;
+    const end = i + 1 < state.trendsData.length
+      ? new Date(state.trendsData[i + 1].date - 1)
+      : new Date(d.getTime() + 6 * 86400000);
+
+    let tempSum = 0, rainSum = 0, cnt = 0;
+    for (let cur = new Date(d); cur <= end; cur.setDate(cur.getDate() + 1)) {
+      const key = cur.toISOString().split('T')[0];
+      if (wMap[key]) {
+        tempSum += wMap[key].temp ?? 0;
+        rainSum += wMap[key].rain ?? 0;
+        cnt++;
+      }
+    }
+
+    aligned.temp.push(cnt ? tempSum / cnt : null);
+    aligned.rain.push(cnt ? rainSum       : null);
+  }
+
+  state.weatherData = aligned;
+  updateStats();
+  renderChart();
+  renderCorrelation();
+  setStatus('active', 'DATA LOADED');
+
+  weatherStatusMsg.textContent = `Weather loaded for ${state.regionName}`;
+  fetchSpinner.style.display = 'none';
+}
+
+// ─────────────────────────────────────────────
+// Chart
+// ─────────────────────────────────────────────
+function renderChart() {
+  emptyState.classList.add('hidden');
+  chartCanvas.classList.remove('hidden');
+
+  const labels = state.trendsData.map(d => {
+    return d.date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: '2-digit' });
+  });
+
+  const metric = weatherMetric.value;
+  const metricLabel = { temp: 'Temp (°C)', rain: 'Rainfall (mm)' }[metric];
+  const metricColor = { temp: '#ff6b35', rain: '#7cfc74' }[metric];
+
+  const datasets = [];
+
+  if (state.visible.trend) {
+    datasets.push({
+      label: 'Search Interest',
+      data: state.trendsData.map(d => d.value),
+      borderColor: '#00d4ff',
+      backgroundColor: 'rgba(0,212,255,0.06)',
+      borderWidth: 2,
+      pointRadius: 3,
+      pointHoverRadius: 6,
+      tension: 0.35,
+      fill: true,
+      yAxisID: 'yTrend',
+    });
+  }
+
+  if (state.visible[metric] && state.weatherData[metric]) {
+    datasets.push({
+      label: metricLabel,
+      data: state.weatherData[metric],
+      borderColor: metricColor,
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      pointRadius: 2,
+      pointHoverRadius: 5,
+      tension: 0.35,
+      borderDash: [5, 3],
+      yAxisID: 'yWeather',
+    });
+  }
+
+  const scales = {
+    x: {
+      ticks: {
+        color: '#6b82a8',
+        font: { family: 'DM Mono', size: 10 },
+        maxTicksLimit: 12,
+        maxRotation: 45,
+      },
+      grid: { color: 'rgba(31,47,71,0.6)' },
+    },
+    yTrend: {
+      type: 'linear',
+      position: 'left',
+      min: 0, max: 100,
+      title: { display: true, text: 'Search Interest (0–100)', color: '#00d4ff', font: { family: 'DM Mono', size: 10 } },
+      ticks: { color: '#00d4ff', font: { family: 'DM Mono', size: 10 } },
+      grid: { color: 'rgba(31,47,71,0.5)' },
+    },
+    yWeather: {
+      type: 'linear',
+      position: 'right',
+      title: { display: true, text: metricLabel, color: metricColor, font: { family: 'DM Mono', size: 10 } },
+      ticks: { color: metricColor, font: { family: 'DM Mono', size: 10 } },
+      grid: { drawOnChartArea: false },
+    },
+  };
+
+  if (state.chart) state.chart.destroy();
+
+  state.chart = new Chart(chartCanvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: { color: '#6b82a8', font: { family: 'DM Mono', size: 11 }, boxWidth: 12 }
+        },
+        tooltip: {
+          backgroundColor: '#111827',
+          borderColor: '#1f2f47',
+          borderWidth: 1,
+          titleColor: '#e8f0fe',
+          bodyColor: '#6b82a8',
+          titleFont: { family: 'Syne', size: 11 },
+          bodyFont: { family: 'DM Mono', size: 11 },
+        }
+      },
+      scales,
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+// Toggle buttons
+// ─────────────────────────────────────────────
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const key = btn.dataset.key;
+    state.visible[key] = !state.visible[key];
+    btn.classList.toggle('active', state.visible[key]);
+    if (state.trendsData.length > 0) renderChart();
+  });
+});
+
+// ─────────────────────────────────────────────
+// Stats
+// ─────────────────────────────────────────────
+function updateStats() {
+  // Peak interest
+  const peak = state.trendsData.reduce((m, d) => d.value > m.value ? d : m, state.trendsData[0]);
+  document.getElementById('statPeak').textContent = peak.value;
+  document.getElementById('statPeakDate').textContent = peak.date.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
+
+  // Avg temp
+  const temps = state.weatherData.temp?.filter(v => v != null) || [];
+  if (temps.length) {
+    const avg = temps.reduce((a, b) => a + b, 0) / temps.length;
+    document.getElementById('statTemp').textContent = avg.toFixed(1) + '°';
+    document.getElementById('statTempSub').textContent = state.regionName;
+  }
+
+  // Total rain
+  const rains = state.weatherData.rain?.filter(v => v != null) || [];
+  if (rains.length) {
+    const total = rains.reduce((a, b) => a + b, 0);
+    document.getElementById('statRain').textContent = total.toFixed(0) + 'mm';
+    document.getElementById('statRainSub').textContent = 'total over period';
+  }
+}
+
+// ─────────────────────────────────────────────
+// Correlation
+// ─────────────────────────────────────────────
+function pearson(xs, ys) {
+  const n = xs.length;
+  const pairs = xs.map((x, i) => [x, ys[i]]).filter(([a, b]) => a != null && b != null);
+  if (pairs.length < 3) return null;
+  const [ax, ay] = [pairs.map(p => p[0]), pairs.map(p => p[1])];
+  const mx = ax.reduce((a,b)=>a+b,0)/ax.length;
+  const my = ay.reduce((a,b)=>a+b,0)/ay.length;
+  const num = ax.reduce((s,x,i)=>s+(x-mx)*(ay[i]-my),0);
+  const den = Math.sqrt(ax.reduce((s,x)=>s+(x-mx)**2,0) * ay.reduce((s,y)=>s+(y-my)**2,0));
+  return den === 0 ? 0 : num / den;
+}
+
+function renderCorrelation() {
+  const trend = state.trendsData.map(d => d.value);
+  const rows = [
+    { label: 'Temperature (°C)',  key: 'temp' },
+    { label: 'Rainfall (mm)',     key: 'rain' },
+  ];
+
+  corrBody.innerHTML = rows.map(({ label, key }) => {
+    const r = pearson(trend, state.weatherData[key] || []);
+    if (r === null) return `<tr><td>${label}</td><td colspan="3" style="color:var(--muted)">insufficient data</td></tr>`;
+
+    const abs = Math.abs(r);
+    const dir = r >= 0 ? '↑ Positive' : '↓ Negative';
+    let cls, interp;
+    if      (abs >= 0.7) { cls = 'corr-high'; interp = 'Strong'; }
+    else if (abs >= 0.4) { cls = 'corr-mid';  interp = 'Moderate'; }
+    else if (abs >= 0.2) { cls = 'corr-low';  interp = 'Weak'; }
+    else                 { cls = 'corr-neg';  interp = 'Negligible'; }
+
+    return `<tr>
+      <td>${label}</td>
+      <td>${r.toFixed(3)}</td>
+      <td><span class="corr-badge ${cls}">${interp}</span></td>
+      <td style="color:var(--muted);font-size:0.7rem">${dir}</td>
+    </tr>`;
+  }).join('');
+
+  corrTable.style.display = 'block';
+}
+
+// ─────────────────────────────────────────────
+// Status helper
+// ─────────────────────────────────────────────
+function setStatus(type, msg) {
+  statusText.textContent = msg;
+  statusDot.className = 'status-dot';
+  if (type === 'active')  statusDot.classList.add('active');
+}
+</script>
+</body>
+</html>
