@@ -298,9 +298,9 @@
 
     /* Stats row */
     .stats-row {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-      gap: 16px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
       margin-bottom: 24px;
     }
 
@@ -308,10 +308,12 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 20px;
+      padding: 14px 18px;
       position: relative;
       overflow: hidden;
       transition: border-color 0.2s;
+      flex: 0 1 auto;
+      min-width: 130px;
     }
 
     .stat-card:hover { border-color: rgba(0,119,187,0.3); }
@@ -326,10 +328,10 @@
 
     .stat-value {
       font-family: 'Syne', sans-serif;
-      font-size: 1.8rem;
-      font-weight: 800;
-      letter-spacing: -0.02em;
-      line-height: 1;
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
     }
 
     .stat-sub {
@@ -614,7 +616,7 @@
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M6 1v7M3 6l3 3 3-3M1 10h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          Download
+          Export Data
         </button>
       </div>
     </div>
@@ -985,6 +987,13 @@ function renderChart() {
     yWeather: {
       type: 'linear',
       position: 'right',
+      // Fix temp axis to realistic PH range (20–40°C) to avoid visual exaggeration.
+      // For rainfall, use dynamic min/max with a small buffer instead.
+      ...(metric === 'temp' ? { min: 20, max: 40 } : (() => {
+        const vals = (state.weatherData.rain || []).filter(v => v != null);
+        const maxVal = vals.length ? Math.max(...vals) : 100;
+        return { min: 0, max: Math.ceil(maxVal * 1.2) };
+      })()),
       title: { display: true, text: metricLabel, color: metricColor, font: { family: 'DM Mono', size: 10 } },
       ticks: { color: metricColor, font: { family: 'DM Mono', size: 10 } },
       grid: { drawOnChartArea: false },
@@ -1112,26 +1121,36 @@ function setStatus(type, msg) {
 }
 
 // ─────────────────────────────────────────────
-// Download chart as PNG
+// Export raw data as CSV
 // ─────────────────────────────────────────────
 function downloadChart() {
-  if (!state.chart) return;
-  const canvas = document.getElementById('mainChart');
+  if (!state.trendsData.length) return;
 
-  // Draw onto a white-background offscreen canvas
-  const offscreen = document.createElement('canvas');
-  offscreen.width  = canvas.width;
-  offscreen.height = canvas.height;
-  const ctx = offscreen.getContext('2d');
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, offscreen.width, offscreen.height);
-  ctx.drawImage(canvas, 0, 0);
+  const region = document.getElementById('regionTag').textContent.trim();
+  const dateStr = new Date().toISOString().split('T')[0];
 
+  // Build CSV rows
+  const headers = ['Date', 'Search_Interest', 'Avg_Temperature_C', 'Total_Rainfall_mm'];
+  const rows = state.trendsData.map((d, i) => [
+    d.date.toISOString().split('T')[0],
+    d.value,
+    state.weatherData.temp && state.weatherData.temp[i] != null
+      ? state.weatherData.temp[i].toFixed(2) : '',
+    state.weatherData.rain && state.weatherData.rain[i] != null
+      ? state.weatherData.rain[i].toFixed(2) : '',
+  ]);
+
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(v => `"${v}"`).join(','))
+    .join('\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  const region = document.getElementById('regionTag').textContent.trim().replace(/\s+/g, '_');
-  link.download = `PH_Trends_Weather_${region}_${new Date().toISOString().split('T')[0]}.png`;
-  link.href = offscreen.toDataURL('image/png');
+  link.href     = url;
+  link.download = `PH_Trends_Weather_${region.replace(/\s+/g, '_')}_${dateStr}.csv`;
   link.click();
+  URL.revokeObjectURL(url);
 }
 </script>
 </body>
