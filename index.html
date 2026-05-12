@@ -49,15 +49,20 @@
 
     /* NAV */
     nav {
-      background: var(--black);
-      border-bottom: 2px solid var(--terra);
+      background: transparent;
       height: 52px;
       display: flex;
       align-items: center;
       padding: 0 32px;
-      position: sticky;
-      top: 0;
+      position: fixed;
+      top: 0; left: 0; right: 0;
       z-index: 50;
+      transition: background 0.3s, box-shadow 0.3s;
+    }
+
+    nav.scrolled {
+      background: var(--black);
+      box-shadow: 0 1px 0 rgba(196,92,58,0.5);
     }
 
     .nav-inner {
@@ -80,6 +85,27 @@
 
     .wordmark em { font-style: italic; color: var(--terra-mid); font-weight: 300; }
 
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .nav-back {
+      font-size: 10px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: color 0.15s;
+    }
+
+    .nav-back:hover { color: var(--terra-mid); }
+
     .nav-tag {
       font-size: 10px;
       font-weight: 500;
@@ -88,16 +114,20 @@
       text-transform: uppercase;
     }
 
-    /* WRAPPER */
-    .wrapper {
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 48px 32px 80px;
+    /* HERO STRIP */
+    .hero-strip {
+      background: var(--black);
+      padding: 80px 32px 56px;
+      position: relative;
+      overflow: hidden;
+      border-bottom: 2px solid var(--terra);
     }
 
-    /* PAGE HEADER */
-    .page-header {
-      margin-bottom: 36px;
+    .hero-strip-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
@@ -105,8 +135,35 @@
       flex-wrap: wrap;
     }
 
-    .header-left {}
+    .hero-strip-glow {
+      position: absolute;
+      bottom: -120px; right: -120px;
+      width: 500px; height: 500px;
+      background: radial-gradient(circle, rgba(196,92,58,0.2) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+      transition: transform 0.6s cubic-bezier(0.16,1,0.3,1);
+    }
 
+    /* WRAPPER */
+    .wrapper {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 32px 80px;
+    }
+
+    /* ENTRANCE ANIMATIONS */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .hero-strip .eyebrow     { animation: fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.05s both; }
+    .hero-strip h1           { animation: fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.15s both; }
+    .hero-strip .header-desc { animation: fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.25s both; }
+    .hero-strip .status-pill { animation: fadeUp 0.6s cubic-bezier(0.16,1,0.3,1) 0.3s both; }
+
+    /* PAGE HEADER — now inside hero strip */
     .eyebrow {
       display: flex;
       align-items: center;
@@ -115,7 +172,7 @@
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.1em;
-      color: var(--terra);
+      color: var(--terra-mid);
       margin-bottom: 10px;
     }
 
@@ -124,7 +181,7 @@
       display: block;
       width: 18px;
       height: 1.5px;
-      background: var(--terra);
+      background: var(--terra-mid);
     }
 
     h1 {
@@ -133,15 +190,15 @@
       font-weight: 700;
       line-height: 1.06;
       letter-spacing: -0.02em;
-      color: var(--black);
+      color: var(--white);
       margin-bottom: 6px;
     }
 
-    h1 em { font-style: italic; color: var(--terra); font-weight: 300; }
+    h1 em { font-style: italic; color: var(--terra-mid); font-weight: 300; }
 
     .header-desc {
       font-size: 12px;
-      color: var(--muted2);
+      color: rgba(255,255,255,0.35);
       font-family: 'DM Mono', monospace;
       letter-spacing: 0.04em;
     }
@@ -151,12 +208,12 @@
       align-items: center;
       gap: 8px;
       padding: 6px 14px;
-      background: var(--white);
-      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
       border-radius: 999px;
       font-size: 10px;
       font-family: 'DM Mono', monospace;
-      color: var(--muted2);
+      color: rgba(255,255,255,0.4);
       letter-spacing: 0.06em;
       align-self: flex-start;
       margin-top: 4px;
@@ -165,7 +222,7 @@
     .status-dot {
       width: 7px; height: 7px;
       border-radius: 50%;
-      background: var(--muted2);
+      background: rgba(255,255,255,0.2);
       transition: background 0.3s;
       flex-shrink: 0;
     }
@@ -573,16 +630,20 @@
 </head>
 <body>
 
-<nav>
+<nav id="mainNav">
   <div class="nav-inner">
     <a class="wordmark" href="https://az-sort.github.io/HomePage/">az<em>-</em>sort</a>
-    <span class="nav-tag">Trend analysis</span>
+    <div class="nav-right">
+      <a class="nav-back" href="https://az-sort.github.io/HomePage/">← All tools</a>
+      <span class="nav-tag">Trend analysis</span>
+    </div>
   </div>
 </nav>
 
-<div class="wrapper">
-
-  <div class="page-header">
+<!-- HERO STRIP -->
+<div class="hero-strip" id="heroStrip">
+  <div class="hero-strip-glow" id="heroGlow"></div>
+  <div class="hero-strip-inner">
     <div class="header-left">
       <div class="eyebrow">Trend analysis</div>
       <h1>PH Trends<br><em>× Weather.</em></h1>
@@ -593,6 +654,9 @@
       <span id="statusText">AWAITING DATA</span>
     </div>
   </div>
+</div>
+
+<div class="wrapper">
 
   <div id="fileWarning">
     ⚠️ <strong>Weather data won't load when opened as a local file.</strong><br>
@@ -1219,6 +1283,27 @@ function downloadChart() {
   link.click();
   URL.revokeObjectURL(url);
 }
+
+// ── Nav scroll state ─────────────────────────────────
+const mainNav = document.getElementById('mainNav');
+window.addEventListener('scroll', () => {
+  mainNav.classList.toggle('scrolled', window.scrollY > 10);
+}, { passive: true });
+
+// ── Parallax on hero glow ────────────────────────────
+const heroGlow  = document.getElementById('heroGlow');
+const heroStrip = document.getElementById('heroStrip');
+
+heroStrip.addEventListener('mousemove', e => {
+  const rect = heroStrip.getBoundingClientRect();
+  const cx = (e.clientX - rect.left) / rect.width;
+  const cy = (e.clientY - rect.top)  / rect.height;
+  heroGlow.style.transform = `translate(${(cx - 0.5) * -36}px, ${(cy - 0.5) * -24}px)`;
+});
+
+heroStrip.addEventListener('mouseleave', () => {
+  heroGlow.style.transform = 'translate(0,0)';
+});
 </script>
 </body>
 </html>
